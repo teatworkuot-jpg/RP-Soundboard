@@ -77,6 +77,7 @@ class MainWindow : public QWidget
 	void onPausePlayingSound();
 	void onUnpausePlayingSound();
 	void onPlayingIconTimer();
+	void onButtonBlinkTimer();
 	void onUpdateShowHotkeysOnButtons(bool val);
 	void onUpdateHotkeysDisabled(bool val);
 	void onButtonFileDropped(const QList<QUrl>& urls);
@@ -114,6 +115,9 @@ class MainWindow : public QWidget
 	QString unescapeCustomText(const QString& text);
 	void applyTheme(ThemeMode mode);
 
+	SoundButton* findButtonByFilename(const QString& filename) const;
+	void setActivePlayingButton(SoundButton* button);
+
 	class ModelObserver : public ConfigModel::Observer
 	{
 	  public:
@@ -142,6 +146,9 @@ class MainWindow : public QWidget
 	ExpandableSection* configsSection;
 	QTimer* playingIconTimer;
 	int playingIconIndex;
+	QTimer* m_buttonBlinkTimer;
+	QPointer<SoundButton> m_activePlayingButton;
+	QString m_currentPlayingFilename;
 	QIcon m_pauseIcon;
 	QIcon m_playIcon;
 	std::array<QRadioButton*, NUM_CONFIGS> m_configRadioButtons;

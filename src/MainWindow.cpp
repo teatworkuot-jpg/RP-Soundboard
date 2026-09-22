@@ -238,6 +238,13 @@ MainWindow::MainWindow(ConfigModel* model, QWidget* parent /*= 0*/) :
 	playingIconTimer->setInterval(150);
 	connect(playingIconTimer, SIGNAL(timeout()), this, SLOT(onPlayingIconTimer()));
 
+	// Single shared timer driving the currently-playing button's blink animation.
+	// Only one sound can ever be playing at a time (see Sampler), so only one
+	// button is ever active here - no per-button timers needed.
+	m_buttonBlinkTimer = new QTimer(this);
+	m_buttonBlinkTimer->setInterval(500); // toggle twice per second -> ~1s full blink cycle
+	connect(m_buttonBlinkTimer, SIGNAL(timeout()), this, SLOT(onButtonBlinkTimer()));
+
 	Sampler* sampler = sb_getSampler();
 	connect(
 		sampler, SIGNAL(onStartPlaying(bool, QString)), this, SLOT(onStartPlayingSound(bool, QString)),
@@ -423,6 +430,22 @@ void MainWindow::createButtons()
 
 	if (m_buttonBubble)
 		m_buttonBubble->attachTo(m_buttons[0]);
+
+	// The old SoundButton objects (including whichever one was showing the
+	// playing/paused indicator) were just deleted above. Re-resolve and
+	// re-apply the indicator on the new button set so it isn't lost if the
+	// grid is rebuilt (e.g. rows/cols changed) while a sound is playing.
+	if (!m_currentPlayingFilename.isEmpty())
+	{
+		setActivePlayingButton(findButtonByFilename(m_currentPlayingFilename));
+		if (m_activePlayingButton)
+		{
+			bool paused = sb_getSampler()->getState() == Sampler::ePAUSED;
+			m_activePlayingButton->setPlayIndicator(
+				paused ? SoundButton::PlayIndicator::Paused : SoundButton::PlayIndicator::Playing
+			);
+		}
+	}
 }
 
 
@@ -670,6 +693,20 @@ void MainWindow::onStartPlayingSound(bool preview, QString filename)
 	ui->b_stop->setEnabled(true);
 	ui->b_pause->setEnabled(true);
 	ui->b_pause->setIcon(m_pauseIcon);
+
+	// Previews (e.g. from the advanced sound settings dialog) aren't necessarily
+	// tied to a button, so only match up and highlight a button for real playback.
+	m_currentPlayingFilename = preview ? QString() : filename;
+	setActivePlayingButton(preview ? nullptr : findButtonByFilename(filename));
+	if (m_activePlayingButton)
+	{
+		m_activePlayingButton->setPlayIndicator(SoundButton::PlayIndicator::Playing);
+		m_buttonBlinkTimer->start();
+	}
+	else
+	{
+		m_buttonBlinkTimer->stop();
+	}
 }
 
 
@@ -679,6 +716,10 @@ void MainWindow::onStopPlayingSound()
 	ui->playingLabel->setText("");
 	ui->playingIconLabel->hide();
 	ui->b_pause->setIcon(m_pauseIcon);
+
+	m_buttonBlinkTimer->stop();
+	m_currentPlayingFilename.clear();
+	setActivePlayingButton(nullptr);
 }
 
 
@@ -686,6 +727,10 @@ void MainWindow::onPausePlayingSound()
 {
 	playingIconTimer->stop();
 	ui->b_pause->setIcon(m_playIcon);
+
+	m_buttonBlinkTimer->stop();
+	if (m_activePlayingButton)
+		m_activePlayingButton->setPlayIndicator(SoundButton::PlayIndicator::Paused);
 }
 
 
@@ -693,6 +738,12 @@ void MainWindow::onUnpausePlayingSound()
 {
 	playingIconTimer->start();
 	ui->b_pause->setIcon(m_pauseIcon);
+
+	if (m_activePlayingButton)
+	{
+		m_activePlayingButton->setPlayIndicator(SoundButton::PlayIndicator::Playing);
+		m_buttonBlinkTimer->start();
+	}
 }
 
 
@@ -700,6 +751,38 @@ void MainWindow::onPlayingIconTimer()
 {
 	setPlayingLabelIcon(playingIconIndex);
 	++playingIconIndex %= 4;
+}
+
+
+void MainWindow::onButtonBlinkTimer()
+{
+	if (m_activePlayingButton)
+		m_activePlayingButton->toggleBlink();
+}
+
+
+SoundButton* MainWindow::findButtonByFilename(const QString& filename) const
+{
+	if (filename.isEmpty())
+		return nullptr;
+
+	for (SoundButton* button : m_buttons)
+	{
+		int buttonId = button->property("buttonId").toInt();
+		const SoundInfo* info = m_model->getSoundInfo(buttonId);
+		if (info && info->filename == filename)
+			return button;
+	}
+	return nullptr;
+}
+
+
+void MainWindow::setActivePlayingButton(SoundButton* button)
+{
+	if (m_activePlayingButton && m_activePlayingButton != button)
+		m_activePlayingButton->setPlayIndicator(SoundButton::PlayIndicator::None);
+
+	m_activePlayingButton = button;
 }
 
 

@@ -22,7 +22,9 @@ const QString& getButtonMime()
 SoundButton::SoundButton(QWidget* parent) :
 	QPushButton(parent),
 	pressing(false),
-	dragging(false)
+	dragging(false),
+	playIndicator(PlayIndicator::None),
+	blinkPhase(false)
 {
 	setAcceptDrops(true);
 }
@@ -54,7 +56,7 @@ void SoundButton::dragLeaveEvent(QDragLeaveEvent*)
 
 	pressing = false;
 	dragging = false;
-	applyBackgroundColor(backgroundColor);
+	applyPlayIndicatorColor();
 }
 
 
@@ -62,7 +64,7 @@ void SoundButton::dropEvent(QDropEvent* evt)
 {
 	pressing = false;
 	dragging = false;
-	applyBackgroundColor(backgroundColor);
+	applyPlayIndicatorColor();
 	SoundButton* button = nullptr;
 	if (evt->mimeData()->hasUrls())
 	{
@@ -134,6 +136,57 @@ void SoundButton::applyBackgroundColor(const QColor& color)
 	}
 	else
 		setStyleSheet(QString());
+}
+
+
+namespace
+{
+// Two alternating shades for the "currently playing" pulse, and one static
+// color for "paused". Kept subtle/desaturated on purpose so the effect reads
+// as a clear status indicator rather than a flashy attention-grabber.
+const QColor kPlayingBlinkColorA(46, 160, 67);
+const QColor kPlayingBlinkColorB(120, 214, 138);
+const QColor kPausedColor(224, 159, 33);
+}
+
+
+void SoundButton::setPlayIndicator(PlayIndicator indicator)
+{
+	if (playIndicator == indicator)
+		return;
+
+	playIndicator = indicator;
+	blinkPhase = false;
+	applyPlayIndicatorColor();
+}
+
+
+void SoundButton::toggleBlink()
+{
+	if (playIndicator != PlayIndicator::Playing)
+		return;
+
+	blinkPhase = !blinkPhase;
+	applyPlayIndicatorColor();
+}
+
+
+void SoundButton::applyPlayIndicatorColor()
+{
+	switch (playIndicator)
+	{
+	case PlayIndicator::Playing:
+		applyBackgroundColor(blinkPhase ? kPlayingBlinkColorA : kPlayingBlinkColorB);
+		break;
+	case PlayIndicator::Paused:
+		applyBackgroundColor(kPausedColor);
+		break;
+	case PlayIndicator::None:
+	default:
+		// Restore whatever background color the user configured for this button (if any)
+		applyBackgroundColor(backgroundColor);
+		break;
+	}
 }
 
 

@@ -24,15 +24,33 @@ class SoundButton : public QPushButton
 
 	void setBackgroundColor(const QColor& color);
 
+	// Visual indication of this button's sound playback state.
+	// None: normal appearance (button's configured background color, if any)
+	// Playing: continuously alternates between two colors (driven by toggleBlink())
+	// Paused: static, distinct color
+	enum class PlayIndicator
+	{
+		None,
+		Playing,
+		Paused,
+	};
+	void setPlayIndicator(PlayIndicator indicator);
+	// Call periodically (e.g. from a single shared QTimer) while indicator == Playing
+	// to advance the blink. No-op for any other indicator state.
+	void toggleBlink();
+
   signals:
 	void fileDropped(const QList<QUrl>&);
 	void buttonDropped(SoundButton* button);
 
   private:
 	void applyBackgroundColor(const QColor& color);
+	void applyPlayIndicatorColor();
 
 	bool pressing;
 	bool dragging;
 	QPoint dragStart;
 	QColor backgroundColor;
+	PlayIndicator playIndicator;
+	bool blinkPhase;
 };
