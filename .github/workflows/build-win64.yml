@@ -1,0 +1,98 @@
+name: Build Win64 DLL
+
+on:
+  push:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build-win64:
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: create submodule status file
+        run: git submodule status > submodule_status
+
+      - name: Restore ffmpeg cache
+        id: cache-ffmpeg-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/ffmpeg/build/x86_64
+          key: cache-ffmpeg-build-win64-${{ hashFiles('submodule_status', 'ffmpeg/build_ffmpeg.sh', '.github/workflows/build-win64.yml') }}
+
+      # Everything below this point only needs to run when the ffmpeg cache
+      # missed (first build, or ffmpeg submodule/script changed).
+      - if: ${{ steps.cache-ffmpeg-restore.outputs.cache-hit != 'true' }}
+        name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          toolset: 14.2
+          arch: x64
+
+      - if: ${{ steps.cache-ffmpeg-restore.outputs.cache-hit != 'true' }}
+        name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          install: >-
+            make
+            diffutils
+            nasm
+            pkg-config
+            git
+          path-type: inherit
+          update: true
+
+      - if: ${{ steps.cache-ffmpeg-restore.outputs.cache-hit != 'true' }}
+        name: Checkout ffmpeg submodule
+        run: git submodule update --init --recursive
+
+      - if: ${{ steps.cache-ffmpeg-restore.outputs.cache-hit != 'true' }}
+        name: Build ffmpeg
+        shell: msys2 {0}
+        run: |
+          pushd ffmpeg
+          ./build_ffmpeg.sh
+          popd
+
+      - if: ${{ steps.cache-ffmpeg-restore.outputs.cache-hit != 'true' }}
+        name: Save ffmpeg cache
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/ffmpeg/build/x86_64
+          key: ${{ steps.cache-ffmpeg-restore.outputs.cache-primary-key }}
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.*'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+          install-deps: 'true'
+          cache: 'true'
+          cache-key-prefix: 'install-qt-action-win64'
+
+      - name: Configure CMake
+        run: >
+          cmake -G "Visual Studio 17 2022" -A x64 -T v142
+          -B ${{ github.workspace }}/build
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
+          -DRPSB_MAKE_PLUGIN_FILE=OFF
+
+      - name: Build
+        run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target INSTALL
+
+      - name: Upload rp_soundboard_win64.dll
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp_soundboard_win64
+          path: ${{ github.workspace }}/install/plugins/rp_soundboard_win64.dll
+          if-no-files-found: error
