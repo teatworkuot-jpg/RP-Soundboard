@@ -81,7 +81,9 @@ jobs:
           install-deps: 'true'
           cache: 'true'
           cache-key-prefix: 'install-qt-action-win64'
-
+- name: Set CI version
+  shell: bash
+  run: echo "0.0.0" > version
       - name: Configure CMake
         run: >
           cmake -G "Visual Studio 17 2022" -A x64 -T v142
