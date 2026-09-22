@@ -15,7 +15,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+- name: Fetch repository tags
+  run: git fetch --force --tags
       - name: create submodule status file
         run: git submodule status > submodule_status
 
