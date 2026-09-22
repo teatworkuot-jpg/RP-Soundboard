@@ -17,6 +17,8 @@ jobs:
           fetch-depth: 0
 - name: Fetch repository tags
   run: git fetch --force --tags
+  - name: Create fallback tag
+  run: git tag v0.0.0
       - name: create submodule status file
         run: git submodule status > submodule_status
 
